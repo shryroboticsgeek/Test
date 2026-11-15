@@ -4,7 +4,6 @@
 Implement RobotIO with the VEX AI vision and V5-brain communication APIs used by
 your robot. Unknown vision clearance is treated as blocked.
 """
-
 import math
 import time
 from dataclasses import dataclass
@@ -19,8 +18,6 @@ POLL_INTERVAL_SECONDS = 0.02
 
 @dataclass(frozen=True)
 class SensorSnapshot:
-    """Clearances are conservative; None means the direction is unobserved."""
-
     front_pressed: bool
     rear_pressed: bool
     left_pressed: bool
@@ -35,10 +32,7 @@ class RobotIO(Protocol):
     """Hardware adapter for sensors and V5-brain drive commands."""
 
     def read_snapshot(self) -> SensorSnapshot:
-        """Read switches and calibrated AI Vision clearances.
-
-        Return None for any direction the sensor cannot currently verify as clear.
-        """
+        """Read all four switches and current vision-derived clearances."""
         ...
 
     def drive(self, forward: float, turn: float) -> None:
