@@ -7,9 +7,10 @@ import time
 from dataclasses import dataclass
 from turtle import right
 from typing import Optional, Protocol
+from vex import * 
 
 MIN_CLEARANCE_MM= 500.00
-# this indicates that if the bumper were to be pressed within 500 meters of itself it would be 
+# this indicates that if the bumper were to be pressed within 0.5 meters of itself it would be 
 FORWARD_SPEED= 0.25
 #indicates the speed of the forward movement after the bumper were to be pressed
 TURN_SPEED= 0.25
@@ -46,7 +47,9 @@ class RobotIO(Protocol):
     #stop stops the robot 
     #tuff ahh code lwk
 
+# this is defining a new object for connecting to our vex hardware so tuff ik it is currently 11:24 pm rn i need sleep
 class VexAIRobotIO:
+    #vexairobot io is a container for the references to the four bumper devices that we have along wiht the one distance sensor i provide when creating the robot
     def __init__(
         self,
         front_bumper,
@@ -62,6 +65,8 @@ class VexAIRobotIO:
         self._distance_sensor = distance_sensor
 
     def read_snapshot(self) -> SensorSnapshot:
+        # read the current distance from the distance sensor in millimeters
+        # takes one reading from the distance sensor and checks whether each bumper is pressed
         distance_mm = self._distance_sensor.object_distance(MM)
 
         return SensorSnapshot(
@@ -75,3 +80,35 @@ class VexAIRobotIO:
             right_clearance_mm=None,
         )
 
+class BumperAvoidanceController:
+    def __init__(self, robot: RobotIO) -> None:
+        self._robot = robot
+
+    def step(self) -> None:
+        snapshot = self._robot.read_snapshot()
+
+        front_blocked = snapshot.front_pressed or (
+            snapshot.front_clearance_mm is not None
+            and snapshot.front_clearance_mm <= MIN_CLEARANCE_MM
+        )
+
+        if (
+            (snapshot.front_pressed and snapshot.rear_pressed)
+            or (snapshot.left_pressed and snapshot.right_pressed)
+        ):
+            self._robot.stop()
+        elif front_blocked:
+            if snapshot.rear_pressed:
+                self._robot.stop()
+            else:
+                # Assumes positive turn means right, negative means left.
+                turn = -TURN_SPEED if snapshot.right_pressed else TURN_SPEED
+                self._robot.drive(-FORWARD_SPEED, turn)
+        elif snapshot.rear_pressed:
+            self._robot.drive(FORWARD_SPEED, 0.0)
+        elif snapshot.left_pressed:
+            self._robot.drive(FORWARD_SPEED, TURN_SPEED)
+        elif snapshot.right_pressed:
+            self._robot.drive(FORWARD_SPEED, -TURN_SPEED)
+        else:
+            self._robot.drive(FORWARD_SPEED, 0.0)
