@@ -57,12 +57,16 @@ class VexAIRobotIO:
         left_bumper,
         right_bumper,
         distance_sensor,
+        left_motor,
+        right_motor,
     ) -> None:
         self._front_bumper = front_bumper
         self._rear_bumper = rear_bumper
         self._left_bumper = left_bumper
         self._right_bumper = right_bumper
         self._distance_sensor = distance_sensor
+        self._left_motor = left_motor
+        self._right_motor = right_motor
 
     def read_snapshot(self) -> SensorSnapshot:
         # read the current distance from the distance sensor in millimeters
@@ -80,22 +84,40 @@ class VexAIRobotIO:
             right_clearance_mm=None,
         )
 
+    def drive(self, forward: float, turn: float) -> None:
+        left_speed = max(-1.0, min(1.0, forward + turn))
+        right_speed = max(-1.0, min(1.0, forward - turn))
+        self._spin_motor(self._left_motor, left_speed)
+        self._spin_motor(self._right_motor, right_speed)
+
+    def _spin_motor(self, motor, speed: float) -> None:
+        direction = FORWARD if speed >= 0 else REVERSE
+        motor.spin(direction, abs(speed) * 100, PERCENT)
+
+    def stop(self) -> None:
+        self._left_motor.stop()
+        self._right_motor.stop()
+
+
 class BumperAvoidanceController:
     def __init__(self, robot: RobotIO) -> None:
         self._robot = robot
-
+# so what this basicallly does is it saves the provided robot interfaace as a self._robot, so the controller can use it later. 
     def step(self) -> None:
+        # we are defining step and this code runs when another part of the program calls that method
         snapshot = self._robot.read_snapshot()
-
+        #calls read snapnshot to get the current bumper states and distance reading, then saves them in snanpshot 
         front_blocked = snapshot.front_pressed or (
             snapshot.front_clearance_mm is not None
             and snapshot.front_clearance_mm <= MIN_CLEARANCE_MM
+            #sets front blocked to ture if the front bumper is pressed, otherwise it checks whether a front distance reading exists and is 500 mm or less. if neither conditon i strue, front blocked is false instead
         )
 
         if (
             (snapshot.front_pressed and snapshot.rear_pressed)
             or (snapshot.left_pressed and snapshot.right_pressed)
         ):
+            # Stop if bumpers on opposite sides are pressed; otherwise, handle a blocked front.
             self._robot.stop()
         elif front_blocked:
             if snapshot.rear_pressed:
@@ -112,3 +134,48 @@ class BumperAvoidanceController:
             self._robot.drive(FORWARD_SPEED, -TURN_SPEED)
         else:
             self._robot.drive(FORWARD_SPEED, 0.0)
+
+
+def main() -> None:
+    # Replace these placeholders with the devices configured for your VEX robot.
+    front_bumper = None
+    rear_bumper = None
+    left_bumper = None
+    right_bumper = None
+    distance_sensor = None
+    left_motor = None
+    right_motor = None
+
+    devices = (
+        front_bumper,
+        rear_bumper,
+        left_bumper,
+        right_bumper,
+        distance_sensor,
+        left_motor,
+        right_motor,
+    )
+    if any(device is None for device in devices):
+        raise RuntimeError(
+            "Configure all bumper, distance sensor, and drivetrain device "
+            "placeholders before running."
+        )
+
+    robot = VexAIRobotIO(
+        front_bumper,
+        rear_bumper,
+        left_bumper,
+        right_bumper,
+        distance_sensor,
+        left_motor,
+        right_motor,
+    )
+    controller = BumperAvoidanceController(robot)
+
+    while True:
+        controller.step()
+        wait(POLL_INTERVAL_SECONDS, SECONDS)
+
+
+if __name__ == "__main__":
+    main()
